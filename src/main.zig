@@ -14,11 +14,8 @@ pub fn main() !void {
     const problem_str = args.next() orelse return error.MissingProblemArgument;
     const problem = try std.fmt.parseInt(u8, problem_str, 10);
 
-    const infile_name = switch (problem) {
-        1 => "day1.in",
-        2 => "day2.in",
-        else => return error.UnknownProblem,
-    };
+    const infile_name = try std.fmt.allocPrint(allocator, "day{}.in", .{problem});
+    defer allocator.free(infile_name);
     const input_buf = try std.fs.Dir.readFileAlloc(std.fs.cwd(), allocator, infile_name, 65536);
     defer allocator.free(input_buf);
     const input = std.mem.trim(u8, input_buf, &std.ascii.whitespace);
