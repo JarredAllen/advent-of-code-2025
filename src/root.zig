@@ -124,3 +124,25 @@ test "day 2 hard given example" {
     const allocator = gpa.allocator();
     try std.testing.expect(try day2hard(allocator, "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124") == 4174379265);
 }
+
+pub fn day3easy(buffer: []const u8) !u64 {
+    var sum: u64 = 0;
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        var max_joltage: u64 = 0;
+        for (0..line.len - 1) |offset_1| {
+            for (offset_1 + 1..line.len) |offset_2| {
+                const joltage = (line[offset_1] - '0') * 10 + (line[offset_2] - '0');
+                if (joltage > max_joltage) {
+                    max_joltage = joltage;
+                }
+            }
+        }
+        sum += max_joltage;
+    }
+    return sum;
+}
+
+test "day 3 easy given example" {
+    try std.testing.expect(try day3easy("987654321111111\n811111111111119\n234234234234278\n818181911112111") == 357);
+}

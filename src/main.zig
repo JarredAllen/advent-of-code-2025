@@ -33,6 +33,10 @@ pub fn main() !void {
             const day2hard = try advent_of_code_2025.day2hard(allocator, input);
             std.debug.print("Day 2 hard: {}\n", .{day2hard});
         },
+        3 => {
+            const day3easy = try advent_of_code_2025.day3easy(input);
+            std.debug.print("Day 3 easy: {}\n", .{day3easy});
+        },
         else => return error.UnknownProblem,
     }
 }
