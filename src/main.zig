@@ -5,16 +5,37 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    var buffer = try allocator.alloc(u8, 65536);
-    defer allocator.free(buffer);
 
-    var stdin = std.fs.File.stdin().reader(buffer);
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
 
-    const read_len = try stdin.read(buffer);
-    const input = buffer[0..read_len];
+    _ = args.next() orelse return;
 
-    const day1easy = try advent_of_code_2025.day1easy(input);
-    std.debug.print("Day 1 easy: {}\n", .{day1easy});
-    const day1hard = try advent_of_code_2025.day1hard(input);
-    std.debug.print("Day 1 hard: {}\n", .{day1hard});
+    const problem_str = args.next() orelse return error.MissingProblemArgument;
+    const problem = try std.fmt.parseInt(u8, problem_str, 10);
+
+    const infile_name = switch (problem) {
+        1 => "day1.in",
+        2 => "day2.in",
+        else => return error.UnknownProblem,
+    };
+    const input_buf = try std.fs.Dir.readFileAlloc(std.fs.cwd(), allocator, infile_name, 65536);
+    defer allocator.free(input_buf);
+    const input = std.mem.trim(u8, input_buf, &std.ascii.whitespace);
+
+    switch (problem) {
+        1 => {
+            const day1easy = try advent_of_code_2025.day1easy(input);
+            std.debug.print("Day 1 easy: {}\n", .{day1easy});
+            const day1hard = try advent_of_code_2025.day1hard(input);
+            std.debug.print("Day 1 hard: {}\n", .{day1hard});
+        },
+        2 => {
+            const day2easy = try advent_of_code_2025.day2easy(allocator, input);
+            std.debug.print("Day 2 easy: {}\n", .{day2easy});
+            const day2hard = try advent_of_code_2025.day2hard(allocator, input);
+            std.debug.print("Day 2 hard: {}\n", .{day2hard});
+        },
+        else => return error.UnknownProblem,
+    }
 }

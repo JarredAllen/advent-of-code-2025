@@ -55,3 +55,72 @@ test "day 1 easy given example" {
 test "day 1 hard given example" {
     try std.testing.expect(try day1hard("L68\nL30\nR48\nL5\nR60\nL55\nL1\nL99\nR14\nL82\n") == 6);
 }
+
+pub fn day2easy(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var sum: u64 = 0;
+    var ranges = std.mem.splitScalar(u8, buffer, ',');
+    while (ranges.next()) |range| {
+        var bounds = std.mem.splitScalar(u8, range, '-');
+        const lower = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        const upper = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        for (lower..upper + 1) |id| {
+            const id_str = try std.fmt.allocPrint(allocator, "{}", .{id});
+            defer allocator.free(id_str);
+            if (std.mem.eql(u8, id_str[0 .. id_str.len / 2], id_str[id_str.len / 2 .. id_str.len])) {
+                sum += id;
+            }
+        }
+    }
+    return sum;
+}
+
+pub fn day2hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var sum: u64 = 0;
+    var ranges = std.mem.splitScalar(u8, buffer, ',');
+    while (ranges.next()) |range| {
+        var bounds = std.mem.splitScalar(u8, range, '-');
+        const lower = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        const upper = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        for (lower..upper + 1) |id| {
+            const id_str = try std.fmt.allocPrint(allocator, "{}", .{id});
+            defer allocator.free(id_str);
+            for (1..id_str.len / 2 + 1) |chunk_len| {
+                const num_chunks = id_str.len / chunk_len;
+                if (num_chunks <= 1) {
+                    continue;
+                }
+                if (num_chunks * chunk_len != id_str.len) {
+                    continue;
+                }
+                const first_chunk = id_str[0..chunk_len];
+                var any_mismatch = false;
+                for (1..num_chunks) |chunk_num| {
+                    const chunk = id_str[chunk_num * chunk_len .. (chunk_num + 1) * chunk_len];
+                    if (!std.mem.eql(u8, first_chunk, chunk)) {
+                        any_mismatch = true;
+                        break;
+                    }
+                }
+                if (!any_mismatch) {
+                    sum += id;
+                    break;
+                }
+            }
+        }
+    }
+    return sum;
+}
+
+test "day 2 easy given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day2easy(allocator, "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124") == 1227775554);
+}
+
+test "day 2 hard given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day2hard(allocator, "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124") == 4174379265);
+}
