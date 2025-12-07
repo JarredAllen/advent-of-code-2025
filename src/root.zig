@@ -146,3 +146,146 @@ pub fn day3easy(buffer: []const u8) !u64 {
 test "day 3 easy given example" {
     try std.testing.expect(try day3easy("987654321111111\n811111111111119\n234234234234278\n818181911112111") == 357);
 }
+
+pub fn day4easy(allocator: std.mem.Allocator, buffer: []const u8) !u32 {
+    var count: u32 = 0;
+    var map = try std.array_list.Aligned([]const u8, null).initCapacity(allocator, std.mem.count(u8, buffer, "\n") + 1);
+    defer map.deinit(allocator);
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        map.appendAssumeCapacity(line);
+    }
+    for (0..map.items.len) |row| {
+        for (0..map.items[row].len) |col| {
+            if (map.items[row][col] != '@') {
+                continue;
+            }
+            var present_neighbors: u16 = 0;
+            if (row > 0 and col > 0 and map.items[row - 1][col - 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (col > 0 and map.items[row][col - 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (row < map.items.len - 1 and col > 0 and map.items[row + 1][col - 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (row < map.items.len - 1 and map.items[row + 1][col] == '@') {
+                present_neighbors += 1;
+            }
+            if (row < map.items.len - 1 and col < map.items[row].len - 1 and map.items[row + 1][col + 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (col < map.items[row].len - 1 and map.items[row][col + 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (row > 0 and col < map.items[row].len - 1 and map.items[row - 1][col + 1] == '@') {
+                present_neighbors += 1;
+            }
+            if (row > 0 and map.items[row - 1][col] == '@') {
+                present_neighbors += 1;
+            }
+
+            if (present_neighbors < 4) {
+                count += 1;
+            }
+        }
+    }
+    return count;
+}
+
+pub fn day4hard(allocator: std.mem.Allocator, buffer: []const u8) !u32 {
+    var count: u32 = 0;
+    var map = try std.array_list.Aligned(std.array_list.Aligned(bool, null), null).initCapacity(allocator, std.mem.count(u8, buffer, "\n") + 1);
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        var row = try std.array_list.Aligned(bool, null).initCapacity(allocator, line.len);
+        for (line) |cell| {
+            if (cell == '@') {
+                row.appendAssumeCapacity(true);
+            } else {
+                row.appendAssumeCapacity(false);
+            }
+        }
+        map.appendAssumeCapacity(row);
+    }
+    while (true) {
+        var next_map = try std.array_list.Aligned(std.array_list.Aligned(bool, null), null).initCapacity(allocator, map.items.len);
+        var round_count: u16 = 0;
+        for (0..map.items.len) |row| {
+            var next_row = try std.array_list.Aligned(bool, null).initCapacity(allocator, map.items[row].items.len);
+            for (0..map.items[row].items.len) |col| {
+                if (!map.items[row].items[col]) {
+                    next_row.appendAssumeCapacity(false);
+                    continue;
+                }
+                var present_neighbors: u8 = 0;
+                if (row > 0 and col > 0 and map.items[row - 1].items[col - 1]) {
+                    present_neighbors += 1;
+                }
+                if (col > 0 and map.items[row].items[col - 1]) {
+                    present_neighbors += 1;
+                }
+                if (row < map.items.len - 1 and col > 0 and map.items[row + 1].items[col - 1]) {
+                    present_neighbors += 1;
+                }
+                if (row < map.items.len - 1 and map.items[row + 1].items[col]) {
+                    present_neighbors += 1;
+                }
+                if (row < map.items.len - 1 and col < map.items[row].items.len - 1 and map.items[row + 1].items[col + 1]) {
+                    present_neighbors += 1;
+                }
+                if (col < map.items[row].items.len - 1 and map.items[row].items[col + 1]) {
+                    present_neighbors += 1;
+                }
+                if (row > 0 and col < map.items[row].items.len - 1 and map.items[row - 1].items[col + 1]) {
+                    present_neighbors += 1;
+                }
+                if (row > 0 and map.items[row - 1].items[col]) {
+                    present_neighbors += 1;
+                }
+
+                if (present_neighbors < 4) {
+                    round_count += 1;
+                    next_row.appendAssumeCapacity(false);
+                } else {
+                    next_row.appendAssumeCapacity(true);
+                }
+            }
+            next_map.appendAssumeCapacity(next_row);
+        }
+        if (round_count == 0) {
+            for (next_map.items) |*next_row| {
+                next_row.deinit(allocator);
+            }
+            next_map.deinit(allocator);
+            break;
+        } else {
+            count += round_count;
+            for (map.items) |*old_row| {
+                old_row.deinit(allocator);
+            }
+            map.deinit(allocator);
+            map = next_map;
+        }
+    }
+    for (map.items) |*old_row| {
+        old_row.deinit(allocator);
+    }
+    map.deinit(allocator);
+    return count;
+}
+
+test "day 4 easy given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day4easy(allocator, "..@@.@@@@.\n@@@.@.@.@@\n@@@@@.@.@@\n@.@@@@..@.\n@@.@@@@.@@\n.@@@@@@@.@\n.@.@.@.@@@\n@.@@@.@@@@\n.@@@@@@@@.\n@.@.@@@.@.") == 13);
+}
+
+test "day 4 hard given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day4hard(allocator, "..@@.@@@@.\n@@@.@.@.@@\n@@@@@.@.@@\n@.@@@@..@.\n@@.@@@@.@@\n.@@@@@@@.@\n.@.@.@.@@@\n@.@@@.@@@@\n.@@@@@@@@.\n@.@.@@@.@.") == 43);
+}
