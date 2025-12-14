@@ -289,3 +289,98 @@ test "day 4 hard given example" {
     const allocator = gpa.allocator();
     try std.testing.expect(try day4hard(allocator, "..@@.@@@@.\n@@@.@.@.@@\n@@@@@.@.@@\n@.@@@@..@.\n@@.@@@@.@@\n.@@@@@@@.@\n.@.@.@.@@@\n@.@@@.@@@@\n.@@@@@@@@.\n@.@.@@@.@.") == 43);
 }
+
+pub fn day5easy(allocator: std.mem.Allocator, buffer: []const u8) !u32 {
+    var lines = std.mem.splitSequence(u8, buffer, "\n\n");
+    const fresh_ranges = lines.next() orelse return error.MalformedInput;
+    const values = lines.next() orelse return error.MalformedInput;
+
+    var fresh = try std.array_list.Aligned([2]u64, null).initCapacity(allocator, std.mem.count(u8, fresh_ranges, "\n") + 1);
+    defer fresh.deinit(allocator);
+    var fresh_lines = std.mem.splitScalar(u8, fresh_ranges, '\n');
+    while (fresh_lines.next()) |line| {
+        var bounds = std.mem.splitScalar(u8, line, '-');
+        const lower = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        const upper = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        fresh.appendAssumeCapacity([_]u64{ lower, upper });
+    }
+
+    var count: u16 = 0;
+
+    var values_iter = std.mem.splitScalar(u8, values, '\n');
+    while (values_iter.next()) |line| {
+        const value = try std.fmt.parseInt(u64, line, 10);
+        for (fresh.items) |range| {
+            if (value >= range[0] and value <= range[1]) {
+                count += 1;
+                break;
+            }
+        }
+    }
+
+    return count;
+}
+
+pub fn day5hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var lines = std.mem.splitSequence(u8, buffer, "\n\n");
+    const fresh_ranges = lines.next() orelse return error.MalformedInput;
+
+    // Iterate over all ingredient IDs and add them if we're inside any ranges
+    // (which we only need track by the number of ranges currently-included).
+    // This would take far too long to do via brute-force, but we only need to
+    // scan at indices containing a boundary, as those are the only places
+    // where we might switch between including and excluding IDs.
+
+    var fresh_lowers = try std.array_list.Aligned(u64, null).initCapacity(allocator, std.mem.count(u8, fresh_ranges, "\n") + 1);
+    var fresh_uppers = try std.array_list.Aligned(u64, null).initCapacity(allocator, std.mem.count(u8, fresh_ranges, "\n") + 1);
+    defer fresh_lowers.deinit(allocator);
+    defer fresh_uppers.deinit(allocator);
+    var fresh_lines = std.mem.splitScalar(u8, fresh_ranges, '\n');
+    while (fresh_lines.next()) |line| {
+        var bounds = std.mem.splitScalar(u8, line, '-');
+        const lower = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        const upper = try std.fmt.parseInt(u64, bounds.next() orelse return error.MalformedInput, 10);
+        fresh_lowers.appendAssumeCapacity(lower);
+        fresh_uppers.appendAssumeCapacity(upper);
+    }
+    std.sort.pdq(u64, fresh_lowers.items, {}, std.sort.asc(u64));
+    std.sort.pdq(u64, fresh_uppers.items, {}, std.sort.asc(u64));
+
+    var count: u64 = 0;
+    var next_upper_idx: u32 = 0;
+    var nested_level: u8 = 0;
+    var open_idx: u64 = 0;
+    // I'm too lazy to figure out how to make an iterator that interleaves the
+    // two lists.
+    for (fresh_lowers.items) |lower| {
+        while (fresh_uppers.items[next_upper_idx] < lower) {
+            nested_level -= 1;
+            if (nested_level == 0) {
+                std.debug.assert(open_idx != 0);
+                count += fresh_uppers.items[next_upper_idx] - open_idx + 1;
+            }
+            next_upper_idx += 1;
+        }
+        if (nested_level == 0) {
+            open_idx = lower;
+        }
+        nested_level += 1;
+    }
+    count += fresh_uppers.items[fresh_uppers.items.len - 1] - open_idx + 1;
+
+    return count;
+}
+
+test "day 5 easy given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day5easy(allocator, "3-5\n10-14\n16-20\n12-18\n\n1\n5\n8\n11\n17\n32") == 3);
+}
+
+test "day 5 hard given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day5hard(allocator, "3-5\n10-14\n16-20\n12-18\n\n1\n5\n8\n11\n17\n32") == 14);
+}
