@@ -384,3 +384,55 @@ test "day 5 hard given example" {
     const allocator = gpa.allocator();
     try std.testing.expect(try day5hard(allocator, "3-5\n10-14\n16-20\n12-18\n\n1\n5\n8\n11\n17\n32") == 14);
 }
+
+pub fn day6easy(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var worksheet = try std.array_list.Aligned(std.array_list.Aligned(u64, null), null).initCapacity(allocator, std.mem.count(u8, buffer, "\n") + 1);
+    defer worksheet.deinit(allocator);
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    var sum: u64 = 0;
+    while (lines.next()) |line| {
+        var row = try std.array_list.Aligned(u64, null).initCapacity(allocator, std.mem.count(u8, line, " ") + 1);
+        var elems = std.mem.splitScalar(u8, line, ' ');
+        var elem_idx: u32 = 0;
+        while (elems.next()) |elem| {
+            if (elem.len == 0) {
+                continue;
+            }
+            if (std.ascii.isDigit(elem[0])) {
+                row.appendAssumeCapacity(try std.fmt.parseInt(u64, elem, 10));
+            } else {
+                if (elem[0] == '+') {
+                    var acc: u64 = 0;
+                    for (worksheet.items) |worksheet_row| {
+                        acc += worksheet_row.items[elem_idx];
+                    }
+                    sum += acc;
+                } else if (elem[0] == '*') {
+                    var acc: u64 = 1;
+                    for (worksheet.items) |worksheet_row| {
+                        acc *= worksheet_row.items[elem_idx];
+                    }
+                    sum += acc;
+                } else {
+                    @panic("Unexpect operator");
+                }
+            }
+            elem_idx += 1;
+        }
+        worksheet.appendAssumeCapacity(row);
+    }
+
+    for (worksheet.items) |*row| {
+        // We might leak in the presence of an error, but that's okay
+        row.deinit(allocator);
+    }
+
+    return sum;
+}
+
+test "day 6 easy given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day6easy(allocator, "123 328  51 64\n45 64  387 23\n6 98  215 314\n*   +   *   +  ") == 4277556);
+}
