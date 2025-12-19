@@ -436,3 +436,77 @@ test "day 6 easy given example" {
     const allocator = gpa.allocator();
     try std.testing.expect(try day6easy(allocator, "123 328  51 64\n45 64  387 23\n6 98  215 314\n*   +   *   +  ") == 4277556);
 }
+
+pub fn day7easy(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var splits: u64 = 0;
+    var active_columns = try std.array_list.Aligned(u32, null).initCapacity(allocator, 256);
+    defer active_columns.deinit(allocator);
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        var col_idx: u32 = 0;
+        for (line) |cell| {
+            if (cell == 'S') {
+                active_columns.appendAssumeCapacity(col_idx);
+            } else if (cell == '^') {
+                const active_idx = std.mem.indexOfScalar(u32, active_columns.items, col_idx) orelse {
+                    col_idx += 1;
+                    continue;
+                };
+                _ = active_columns.swapRemove(active_idx);
+                if (!std.mem.containsAtLeastScalar(u32, active_columns.items, 1, col_idx - 1)) {
+                    active_columns.appendAssumeCapacity(col_idx - 1);
+                }
+                if (!std.mem.containsAtLeastScalar(u32, active_columns.items, 1, col_idx + 1)) {
+                    active_columns.appendAssumeCapacity(col_idx + 1);
+                }
+                splits += 1;
+            }
+            col_idx += 1;
+        }
+    }
+    return splits;
+}
+
+pub fn day7hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    // NOTE: Directionally the right idea, but I need to be more efficient
+    //
+    // I should store the count associated with each index, probably best to figure out their hashmaps.
+    var timelines: u64 = 1;
+    var active_columns = try std.array_list.Aligned(u32, null).initCapacity(allocator, 1 << 20);
+    defer active_columns.deinit(allocator);
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        var col_idx: u32 = 0;
+        for (line) |cell| {
+            if (cell == 'S') {
+                active_columns.appendAssumeCapacity(col_idx);
+            } else if (cell == '^') {
+                while (std.mem.containsAtLeastScalar(u32, active_columns.items, 1, col_idx)) {
+                    const active_idx = std.mem.indexOfScalar(u32, active_columns.items, col_idx) orelse {
+                        continue;
+                    };
+                    _ = active_columns.swapRemove(active_idx);
+                    active_columns.appendAssumeCapacity(col_idx - 1);
+                    active_columns.appendAssumeCapacity(col_idx + 1);
+                    timelines += 1;
+                }
+            }
+            col_idx += 1;
+        }
+    }
+    return timelines;
+}
+
+test "day 7 easy given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day7easy(allocator, ".......S.......\n...............\n.......^.......\n...............\n......^.^......\n...............\n.....^.^.^.....\n...............\n....^.^...^....\n...............\n...^.^...^.^...\n...............\n..^...^.....^..\n...............\n.^.^.^.^.^...^.\n...............") == 21);
+}
+
+test "day 7 hard given example" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    try std.testing.expect(try day7hard(allocator, ".......S.......\n...............\n.......^.......\n...............\n......^.^......\n...............\n.....^.^.^.....\n...............\n....^.^...^....\n...............\n...^.^...^.^...\n...............\n..^...^.....^..\n...............\n.^.^.^.^.^...^.\n...............") == 40);
+}
