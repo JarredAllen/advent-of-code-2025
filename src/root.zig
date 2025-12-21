@@ -471,28 +471,33 @@ pub fn day7hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
     // NOTE: Directionally the right idea, but I need to be more efficient
     //
     // I should store the count associated with each index, probably best to figure out their hashmaps.
-    var timelines: u64 = 1;
-    var active_columns = try std.array_list.Aligned(u32, null).initCapacity(allocator, 1 << 20);
-    defer active_columns.deinit(allocator);
+    var active_columns = std.hash_map.HashMap(u32, u64, std.hash_map.AutoContext(u32), 30).init(allocator);
+    defer active_columns.deinit();
     var lines = std.mem.splitScalar(u8, buffer, '\n');
     while (lines.next()) |line| {
         var col_idx: u32 = 0;
         for (line) |cell| {
             if (cell == 'S') {
-                active_columns.appendAssumeCapacity(col_idx);
+                try active_columns.put(col_idx, 1);
             } else if (cell == '^') {
-                while (std.mem.containsAtLeastScalar(u32, active_columns.items, 1, col_idx)) {
-                    const active_idx = std.mem.indexOfScalar(u32, active_columns.items, col_idx) orelse {
-                        continue;
-                    };
-                    _ = active_columns.swapRemove(active_idx);
-                    active_columns.appendAssumeCapacity(col_idx - 1);
-                    active_columns.appendAssumeCapacity(col_idx + 1);
-                    timelines += 1;
+                const count = (try active_columns.fetchPut(col_idx, 0) orelse std.hash_map.HashMap(u32, u64, std.hash_map.AutoContext(u32), 30).KV{ .key = 0, .value = 0 }).value;
+                if (col_idx > 0) {
+                    const old_prev = active_columns.get(col_idx - 1) orelse 0;
+                    try active_columns.put(col_idx - 1, old_prev + count);
+                }
+                if (col_idx < line.len - 1) {
+                    const old_prev = active_columns.get(col_idx + 1) orelse 0;
+                    try active_columns.put(col_idx + 1, old_prev + count);
                 }
             }
             col_idx += 1;
         }
+    }
+
+    var timelines: u64 = 0;
+    var timelines_iter = active_columns.valueIterator();
+    while (timelines_iter.next()) |count| {
+        timelines += count.*;
     }
     return timelines;
 }
