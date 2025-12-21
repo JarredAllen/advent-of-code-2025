@@ -515,3 +515,10 @@ test "day 7 hard given example" {
     const allocator = gpa.allocator();
     try std.testing.expect(try day7hard(allocator, ".......S.......\n...............\n.......^.......\n...............\n......^.^......\n...............\n.....^.^.^.....\n...............\n....^.^...^....\n...............\n...^.^...^.^...\n...............\n..^...^.....^..\n...............\n.^.^.^.^.^...^.\n...............") == 40);
 }
+
+pub const day8 = @import("day8.zig");
+
+test {
+    // This references all tests in the imported module
+    std.testing.refAllDeclsRecursive(@This());
+}
