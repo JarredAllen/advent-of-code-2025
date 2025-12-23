@@ -52,6 +52,18 @@ const Machine = struct {
                 return std.math.order(a.heuristic(), b.heuristic());
             }
 
+            fn button_hits_max(this: @This(), button: u32) bool {
+                const self_max: u32 = std.mem.max(u32, this.remaining.items);
+                for (0..this.remaining.items.len) |idx| {
+                    if (button & (@as(u32, 1) << (std.math.cast(u5, idx) orelse return error.FailedCast)) != 0) {
+                        if (this.remaining.items[idx] == self_max) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
             fn push_button(this: @This(), button: u32, alloc: std.mem.Allocator) !@This() {
                 var remaining = try std.array_list.Aligned(u32, null).initCapacity(alloc, this.remaining.items.len);
                 for (0..this.remaining.items.len) |idx| {
@@ -101,26 +113,6 @@ const Machine = struct {
         }
     }
 };
-
-fn joltages_after_press(button: u32, prev: []const u32, allocator: std.mem.Allocator) !std.array_list.Aligned(u32, null) {
-    var joltages = try std.array_list.Aligned(u32, null).initCapacity(allocator, prev.len);
-    for (0..prev.len) |idx| {
-        if (button & (@as(u32, 1) << (std.math.cast(u5, idx) orelse return error.FailedCast)) != 0) {
-            joltages.appendAssumeCapacity(prev[idx] + 1);
-        } else {
-            joltages.appendAssumeCapacity(prev[idx]);
-        }
-    }
-    return joltages;
-}
-fn joltages_enough(joltages: []const u32, goal: []const u32) bool {
-    for (0..joltages.len) |idx| {
-        if (joltages[idx] < goal[idx]) {
-            return false;
-        }
-    }
-    return true;
-}
 
 fn parse_machine(line: []const u8, allocator: std.mem.Allocator) !Machine {
     var chunks = std.mem.splitScalar(u8, line, ' ');
@@ -195,6 +187,7 @@ pub fn hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
         var machine = try parse_machine(line, allocator);
         defer machine.deinit(allocator);
         const machine_presses = try machine.min_presses_joltages(allocator);
+        std.debug.print("Machine {s}: {} presses\n", .{ line, machine_presses });
         num_presses += machine_presses;
     }
 
