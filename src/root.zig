@@ -518,6 +518,7 @@ test "day 7 hard given example" {
 
 pub const day8 = @import("day8.zig");
 pub const day9 = @import("day9.zig");
+pub const day10 = @import("day10.zig");
 
 test {
     // This references all tests in the imported module
