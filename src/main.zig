@@ -2,9 +2,9 @@ const std = @import("std");
 const advent_of_code_2025 = @import("advent_of_code_2025");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    var alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer _ = alloc.deinit();
+    const allocator = alloc.allocator();
 
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
@@ -72,6 +72,8 @@ pub fn main() !void {
         10 => {
             const day10easy = try advent_of_code_2025.day10.easy(allocator, input);
             std.debug.print("Day 10 easy: {}\n", .{day10easy});
+            const day10hard = try advent_of_code_2025.day10.hard(allocator, input);
+            std.debug.print("Day 10 hard: {}\n", .{day10hard});
         },
         else => return error.UnknownProblem,
     }

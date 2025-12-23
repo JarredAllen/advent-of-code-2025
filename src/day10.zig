@@ -10,7 +10,7 @@ const Machine = struct {
         self.joltages.deinit(allocator);
     }
 
-    fn min_presses(self: *const Machine, allocator: std.mem.Allocator) !u64 {
+    fn min_presses_lights(self: *const Machine, allocator: std.mem.Allocator) !u64 {
         var frontier = std.hash_map.HashMap(u32, void, std.hash_map.AutoContext(u32), 30).init(allocator);
         try frontier.put(0, {});
         var len: u64 = 1;
@@ -37,7 +37,89 @@ const Machine = struct {
             }
         }
     }
+
+    fn min_presses_joltages(self: *const Machine, allocator: std.mem.Allocator) !u64 {
+        // NOTE: This function takes too long to run, I think the solution is to use A* instead.
+        const num_levels = self.joltages.items.len;
+        const hash_ctx = struct {
+            pub fn hash(ctx: @This(), key: std.array_list.Aligned(u32, null)) u64 {
+                _ = ctx;
+                var hasher = std.hash.Wyhash.init(0);
+                for (key.items) |item| {
+                    std.hash.autoHash(&hasher, item);
+                }
+                return hasher.final();
+            }
+            pub fn eql(
+                ctx: @This(),
+                a: std.array_list.Aligned(u32, null),
+                b: std.array_list.Aligned(u32, null),
+            ) bool {
+                _ = ctx;
+                if (a.items.len != b.items.len) return false;
+                for (a.items, b.items) |a_item, b_item| {
+                    if (a_item != b_item) return false;
+                }
+                return true;
+            }
+        };
+        var frontier = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
+        var old_values = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
+        defer old_values.deinit();
+
+        {
+            var arr = try std.array_list.Aligned(u32, null).initCapacity(allocator, num_levels);
+            for (0..num_levels) |_| {
+                arr.appendAssumeCapacity(0);
+            }
+            try frontier.put(arr, {});
+        }
+
+        var len: u64 = 1;
+        while (true) {
+            var next_frontier = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
+            var frontier_iter = frontier.keyIterator();
+            while (frontier_iter.next()) |prev| {
+                for (self.buttons.items) |button| {
+                    const next = try joltages_after_press(button, prev.items, allocator);
+                    if (old_values.contains(next)) {
+                        continue;
+                    }
+                    if (joltages_enough(next.items, self.joltages.items)) {
+                        frontier.deinit();
+                        next_frontier.deinit();
+                        return len;
+                    }
+                    try old_values.put(next, {});
+                    try next_frontier.put(next, {});
+                }
+            }
+            frontier.deinit();
+            frontier = next_frontier;
+            len += 1;
+        }
+    }
 };
+
+fn joltages_after_press(button: u32, prev: []const u32, allocator: std.mem.Allocator) !std.array_list.Aligned(u32, null) {
+    var joltages = try std.array_list.Aligned(u32, null).initCapacity(allocator, prev.len);
+    for (0..prev.len) |idx| {
+        if (button & (@as(u32, 1) << (std.math.cast(u5, idx) orelse return error.FailedCast)) != 0) {
+            joltages.appendAssumeCapacity(prev[idx] + 1);
+        } else {
+            joltages.appendAssumeCapacity(prev[idx]);
+        }
+    }
+    return joltages;
+}
+fn joltages_enough(joltages: []const u32, goal: []const u32) bool {
+    for (0..joltages.len) |idx| {
+        if (joltages[idx] < goal[idx]) {
+            return false;
+        }
+    }
+    return true;
+}
 
 fn parse_machine(line: []const u8, allocator: std.mem.Allocator) !Machine {
     var chunks = std.mem.splitScalar(u8, line, ' ');
@@ -89,10 +171,8 @@ pub fn easy(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
     var lines = std.mem.splitScalar(u8, buffer, '\n');
     while (lines.next()) |line| {
         var machine = try parse_machine(line, allocator);
-        // std.debug.print("Machine {s}: {}\n", .{ line, machine });
         defer machine.deinit(allocator);
-        const machine_presses = try machine.min_presses(allocator);
-        // std.debug.print("Machine {s}: {} presses\n", .{ line, machine_presses });
+        const machine_presses = try machine.min_presses_lights(allocator);
         num_presses += machine_presses;
     }
 
@@ -104,4 +184,25 @@ test "easy given example" {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     try std.testing.expect(try easy(allocator, "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 7);
+}
+
+pub fn hard(allocator: std.mem.Allocator, buffer: []const u8) !u64 {
+    var num_presses: u64 = 0;
+
+    var lines = std.mem.splitScalar(u8, buffer, '\n');
+    while (lines.next()) |line| {
+        var machine = try parse_machine(line, allocator);
+        defer machine.deinit(allocator);
+        const machine_presses = try machine.min_presses_joltages(allocator);
+        num_presses += machine_presses;
+    }
+
+    return num_presses;
+}
+
+test "hard given example" {
+    var alloc = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer _ = alloc.deinit();
+    const allocator = alloc.allocator();
+    try std.testing.expect(try hard(allocator, "[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}\n[...#.] (0,2,3,4) (2,3) (0,4) (0,1,2) (1,2,3,4) {7,5,12,7,2}\n[.###.#] (0,1,2,3,4) (0,3,4) (0,1,2,4,5) (1,2) {10,11,11,5,10,5}") == 33);
 }
