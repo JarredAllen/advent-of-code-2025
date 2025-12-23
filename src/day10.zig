@@ -39,64 +39,65 @@ const Machine = struct {
     }
 
     fn min_presses_joltages(self: *const Machine, allocator: std.mem.Allocator) !u64 {
-        // NOTE: This function takes too long to run, I think the solution is to use A* instead.
-        const num_levels = self.joltages.items.len;
-        const hash_ctx = struct {
-            pub fn hash(ctx: @This(), key: std.array_list.Aligned(u32, null)) u64 {
-                _ = ctx;
-                var hasher = std.hash.Wyhash.init(0);
-                for (key.items) |item| {
-                    std.hash.autoHash(&hasher, item);
-                }
-                return hasher.final();
+        const QueueEntry = struct {
+            distance: u32,
+            remaining: std.array_list.Aligned(u32, null),
+
+            fn heuristic(this: @This()) u32 {
+                return this.distance + std.mem.max(u32, this.remaining.items);
             }
-            pub fn eql(
-                ctx: @This(),
-                a: std.array_list.Aligned(u32, null),
-                b: std.array_list.Aligned(u32, null),
-            ) bool {
-                _ = ctx;
-                if (a.items.len != b.items.len) return false;
-                for (a.items, b.items) |a_item, b_item| {
-                    if (a_item != b_item) return false;
+
+            fn cmpFunc(context: void, a: @This(), b: @This()) std.math.Order {
+                _ = context;
+                return std.math.order(a.heuristic(), b.heuristic());
+            }
+
+            fn push_button(this: @This(), button: u32, alloc: std.mem.Allocator) !@This() {
+                var remaining = try std.array_list.Aligned(u32, null).initCapacity(alloc, this.remaining.items.len);
+                for (0..this.remaining.items.len) |idx| {
+                    if (button & (@as(u32, 1) << (std.math.cast(u5, idx) orelse return error.FailedCast)) != 0) {
+                        remaining.appendAssumeCapacity(std.math.sub(u32, this.remaining.items[idx], 1) catch 0);
+                    } else {
+                        remaining.appendAssumeCapacity(this.remaining.items[idx]);
+                    }
+                }
+                const new_distance = this.distance + 1;
+                return .{
+                    .distance = new_distance,
+                    .remaining = remaining,
+                };
+            }
+
+            fn is_done(this: @This()) bool {
+                for (this.remaining.items) |remaining| {
+                    if (remaining > 0) {
+                        return false;
+                    }
                 }
                 return true;
             }
+
+            fn deinit(this: *@This(), alloc: std.mem.Allocator) void {
+                this.remaining.deinit(alloc);
+            }
         };
-        var frontier = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
-        var old_values = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
-        defer old_values.deinit();
 
-        {
-            var arr = try std.array_list.Aligned(u32, null).initCapacity(allocator, num_levels);
-            for (0..num_levels) |_| {
-                arr.appendAssumeCapacity(0);
-            }
-            try frontier.put(arr, {});
-        }
-
-        var len: u64 = 1;
+        var queue = std.PriorityQueue(QueueEntry, void, QueueEntry.cmpFunc).init(allocator, {});
+        defer queue.deinit();
+        try queue.add(QueueEntry{
+            .distance = 0,
+            .remaining = self.joltages,
+        });
         while (true) {
-            var next_frontier = std.hash_map.HashMap(std.array_list.Aligned(u32, null), void, hash_ctx, 30).init(allocator);
-            var frontier_iter = frontier.keyIterator();
-            while (frontier_iter.next()) |prev| {
-                for (self.buttons.items) |button| {
-                    const next = try joltages_after_press(button, prev.items, allocator);
-                    if (old_values.contains(next)) {
-                        continue;
-                    }
-                    if (joltages_enough(next.items, self.joltages.items)) {
-                        frontier.deinit();
-                        next_frontier.deinit();
-                        return len;
-                    }
-                    try old_values.put(next, {});
-                    try next_frontier.put(next, {});
+            var prev_entry = queue.remove();
+            defer prev_entry.deinit(allocator);
+            for (self.buttons.items) |button| {
+                const next_entry = try prev_entry.push_button(button, allocator);
+                if (next_entry.is_done()) {
+                    return next_entry.distance;
                 }
+                try queue.add(next_entry);
             }
-            frontier.deinit();
-            frontier = next_frontier;
-            len += 1;
         }
     }
 };
